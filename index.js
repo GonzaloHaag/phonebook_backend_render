@@ -6,6 +6,7 @@ const cors = require('cors')
 
 app.use(express.json()); // para recibir las solicitudes del body 
 app.use(cors()); // Evitar errores de cors entre el frontend y back
+app.use(express.static('dist')) // servir archivos estaticos
 morgan.token('body', (req) => {
     return req.method === 'POST' ? JSON.stringify(req.body) : ''
 })
