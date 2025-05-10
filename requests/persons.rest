@@ -2,10 +2,9 @@
 GET http://localhost:3001/api/persons
 
 ### Get person 
-GET http://localhost:3001/api/persons/3
-
+GET http://localhost:3001/api/persons/681f757a8a6ab309fa4decf2g
 ### Delete person 
-DELETE http://localhost:3001/api/persons/3
+DELETE http://localhost:3001/api/persons/681fc3614c9d85723c1975d1
 
 
 ### Create person
@@ -13,6 +12,16 @@ POST http://localhost:3001/api/persons
 Content-Type: application/json
 
 {
-    "name":"LA MAMBA LOCA",
-    "number":"000-0000-0000"
+    "name":"Probando formateo de numeros",
+    "number":"040-22334455"
+}
+
+### Update person
+
+PUT http://localhost:3001/api/persons/681fe2599f5a6d2dcb7a3011
+Content-Type: application/json
+
+{
+    "name":"EDIT RUDY GOBERT",
+    "number":"555-78900002"
 }

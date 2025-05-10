@@ -1,8 +1,10 @@
+require('dotenv').config(); // Para usar .env
 const express = require('express');
 const app = express();
-
 const morgan = require('morgan');
-const cors = require('cors')
+const cors = require('cors');
+
+const Person = require('./models/person.js')
 
 app.use(express.json()); // para recibir las solicitudes del body 
 app.use(cors()); // Evitar errores de cors entre el frontend y back
@@ -12,7 +14,7 @@ morgan.token('body', (req) => {
 })
 app.use(morgan(':method :url :status :res[content-length] - :response-time ms :body'))
 
-/** Middleware para saber que peticion viene */
+/** Middleware para saber informacion de la peticion que viene */
 const requestLogger = (request, response, next) => {
     console.log('Method:', request.method)
     console.log('Path:  ', request.path)
@@ -21,65 +23,38 @@ const requestLogger = (request, response, next) => {
     next()
 }
 // uso del middleware
-app.use(requestLogger)
-let persons = [
-    {
-        "id": 1,
-        "name": "Arto Hellas",
-        "number": "040-123456"
-    },
-    {
-        "id": 2,
-        "name": "Ada Lovelace",
-        "number": "39-44-5323523"
-    },
-    {
-        "id": 3,
-        "name": "Dan Abramov",
-        "number": "12-43-234345"
-    },
-    {
-        "id": 4,
-        "name": "Mary Poppendieck",
-        "number": "39-23-6423122"
-    }
-];
-
-const generateId = () => {
-    const maxId = persons.length > 0
-        ? Math.max(...persons.map(n => n.id))
-        : 0
-    return maxId + 1
-}
+app.use(requestLogger);
 
 app.get('/api/persons', (request, response) => {
-    response.json(persons);
+    // mongo db
+    Person.find({}).then(persons => {
+        response.json(persons);
+    });
 });
 
-app.get('/api/persons/:id', (request, response) => {
-    const id = Number(request.params.id);
-
-    const person = persons.find((p) => p.id === id);
-
-    if (!person) {
-        return response.status(400).json({ error: 'Person not found' })
-    }
-
-    response.json(person)
+app.get('/api/persons/:id', (request, response, next) => {
+    const id = request.params.id;
+    
+    Person.findById(id).then(person => {
+        if(person) {
+            response.json(person)
+        } else {
+            response.status(404).end(); // Retorno un not found
+        }
+    })
+    // Middleware de manejo de errores, porque le paso un argumento al next
+    .catch(error => next(error))
 });
 
-app.delete('/api/persons/:id', (request, response) => {
-    const id = Number(request.params.id);
-    const deletedPerson = persons.find((p) => p.id === id); // primero la encuentro
-    if (!deletedPerson) {
-        return response.status(404).json({ error: 'Person not found' });
-    }
-
-    persons = persons.filter((p) => p.id !== id);
-    response.status(200).json(deletedPerson); // devuelvo la persona eliminada
+app.delete('/api/persons/:id', (request, response, next) => {
+    const id = request.params.id;
+    Person.findByIdAndDelete(id).then(result => {
+       response.status(204).end()
+    })
+    .catch(error => next(error))
 });
 
-app.post('/api/persons', (request, response) => {
+app.post('/api/persons', (request, response,next) => {
     const body = request.body; // aca llegaria la persona 
 
     if (!body.name) {
@@ -88,30 +63,40 @@ app.post('/api/persons', (request, response) => {
     if (!body.number) {
         return response.status(400).json({ error: 'Number missing' })
     }
-    const person = {
-        id: generateId(),
+    const person = new Person({ // usamos el schema
         name: body.name,
         number: body.number
-    }
-    const personFind = persons.find((p) => p.name === person.name);
-    if (personFind) {
-        return response.status(400).json({ error: 'name must be unique' })
-    }
-    persons.push(person);
+    });
+    person.save().then(savedPerson => {
+        response.json(savedPerson)
+    })
+    .catch(error => next(error)); //Que lo capture el middleware
 
-    response.json(person); // persona creada
+});
+
+app.put('/api/persons/:id',(request,response,next) => {
+    const { name,number } = request.body; // llega la persona
+
+    Person.findByIdAndUpdate(
+        request.params.id,
+        { name, number },
+        { new: true, runValidators:true, context: 'query' }) // el new true da el documento modificado, validators para que sea validado
+    .then(updatedPerson => {
+        response.json( updatedPerson )
+    })
+    .catch(error => next(error))
 })
 
-app.get('/info', (request, response) => {
-    const personsLenght = persons.length;
-    const now = new Date();
-    response.send(
-        `
-        <h4>Phonebook has info for ${personsLenght} people</h4>
-        <p>${now.toString()}</p>
-        `
-    )
-});
+// app.get('/info', (request, response) => {
+//     const personsLenght = persons.length;
+//     const now = new Date();
+//     response.send(
+//         `
+//         <h4>Phonebook has info for ${personsLenght} people</h4>
+//         <p>${now.toString()}</p>
+//         `
+//     )
+// });
 
 /** Responder para rutas que no existen */
 const unknownEndpoint = (request, response) => {
@@ -120,8 +105,26 @@ const unknownEndpoint = (request, response) => {
 
 app.use(unknownEndpoint)
 
+/** Aca llega el next(error) */
+const errorHandler = (error, request, response, next) => {
+    // captura el error
+    console.error(error.message)
+  
+    if (error.name === 'CastError') {
+        return response.status(400).send({ error: 'malformatted id' })
+      } else if (error.name === 'ValidationError') {
+        /** Errores de validacion de tipos */
+        return response.status(400).json({ error: error.message })
+      }
+  
+    next(error)
+  }
+  
+  // este debe ser el último middleware cargado, ¡también todas las rutas deben ser registrada antes que esto!
+  app.use(errorHandler)
 
-const PORT = process.env.PORT || 3001;
+
+const PORT = process.env.PORT
 
 app.listen(PORT, () => {
     console.log(`SERVER RUNNING IN ${PORT}`)
