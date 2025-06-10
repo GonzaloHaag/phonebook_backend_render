@@ -37,7 +37,7 @@ personSchema.set('toJSON', {
   transform: (document, returnedObject) => {
     returnedObject.id = returnedObject._id.toString() // es clave esta conversion para el futuro!
     delete returnedObject._id // no quiero el id
-    delete returnedObject.__v // no quiero el cambo __v
+    delete returnedObject.__v // no quiero el campo __v
   }
 })
 
